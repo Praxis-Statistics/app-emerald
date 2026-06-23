@@ -16,6 +16,9 @@
 library(brickster)
 library(DBI)
 
+# Per-panel lab dataset loader + the mixed-column splitter.
+source(file.path("R", "lb_datasets.R"))
+
 # Connect to the DataBricks SQL warehouse using ambient/env-var auth.
 connect_databricks <- function() {
   DBI::dbConnect(
@@ -50,10 +53,20 @@ read_study_csv <- function(name, con,
 load_emerald_data <- function() {
   con <- connect_databricks()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  list(
+
+  core <- list(
     DM = read_study_csv("dm", con),
     AE = read_study_csv("ae", con),
     VS = read_study_csv("vs", con),
-    EG = read_study_csv("eg", con)
+    EG = read_study_csv("eg", con),
+    # EX (Study Drug Administration) is a single file. Pass it through the same
+    # mixed numeric/text column splitter as the lab data (split_mixed_columns()
+    # from R/lb_datasets.R) so dose findings view consistently.
+    EX = split_mixed_columns(read_study_csv("ex", con))
   )
+
+  # Each lab file (lb1, lb4, ...) becomes its own named dataset (CENTLAB, FSH,
+  # UR, CHEM, HEM, VIR, PREG, DRUG, ...) with _num/_char helper columns added
+  # for any mixed numeric/text column. See R/lb_datasets.R.
+  c(core, load_lb_datasets(con))
 }

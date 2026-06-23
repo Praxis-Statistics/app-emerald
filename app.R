@@ -1,8 +1,10 @@
 # app.R
 # ---------------------------------------------------------------------------
 # Emerald — exploratory teal app for non-CDISC EDC data.
-# Pulls DM, AE and VS live from DataBricks (study FIVE) and exposes them
-# through the standard teal data-viewer modules.
+# Pulls DM, AE, VS, EG, EX and the per-panel lab files live from DataBricks
+# (study FIVE) and exposes them through the standard teal data-viewer modules.
+# Each lab file is its own dataset (CENTLAB, FSH, UR, CHEM, HEM, VIR, PREG,
+# DRUG, ...) — see R/lb_datasets.R.
 #
 # Run locally:   shiny::runApp()   (or: bash run_app.sh)
 # Requires DataBricks env vars (see R/data_databricks.R) in ~/.Renviron.
@@ -17,25 +19,22 @@ source("R/data_databricks.R")
 raw <- load_emerald_data()
 
 # Build a plain (non-CDISC) teal_data container from the live data.frames.
-data <- teal_data(
-  DM = raw$DM,
-  AE = raw$AE,
-  VS = raw$VS,
-  EG = raw$EG
-)
+# `raw` is a named list (DM, AE, VS, EG + one entry per lab dataset), so build
+# the container dynamically rather than naming each domain by hand.
+data <- do.call(teal_data, raw)
 
 # Non-CDISC join keys so the filter panel propagates selections across domains
-# on SubjectID. DM is 1 row/subject (primary); AE, VS & EG are many rows/subject.
-# If the live schema uses a different subject-id column, adjust here (or drop
-# join_keys entirely — the viewer modules below work without them).
-join_keys(data) <- join_keys(
-  join_key("DM", "DM", "SubjectID"),
-  join_key("DM", "AE", "SubjectID"),
-  join_key("DM", "VS", "SubjectID"),
-  join_key("DM", "EG", "SubjectID")
-)
+# on SubjectID. DM is 1 row/subject (primary); every other domain is many
+# rows/subject. All domains are study FIVE, so SubjectID joins are valid. Only
+# domains that actually carry a SubjectID column are linked.
+jk <- list(join_key("DM", "DM", "SubjectID"))
+for (nm in setdiff(names(raw), "DM")) {
+  if ("SubjectID" %in% names(raw[[nm]]))
+    jk <- c(jk, list(join_key("DM", nm, "SubjectID")))
+}
+join_keys(data) <- do.call(join_keys, jk)
 
-# Assemble the app: a simple data viewer over the three domains.
+# Assemble the app: a simple data viewer over all domains.
 app <- init(
   data = data,
   modules = list(
@@ -44,7 +43,7 @@ app <- init(
         "Emerald — EDC Data Explorer" =
           "Exploratory viewer for non-CDISC EDC data, study FIVE.",
         "Source" =
-          "Data pulled live from DataBricks (DM, AE, VS, EG).",
+          "Data pulled live from DataBricks. DM, AE, VS, EG, EX (Study Drug Administration) plus each lab panel as its own dataset (CENTLAB, FSH, UR, CHEM, HEM, VIR, PREG, DRUG). Mixed numeric/text columns are split into <col>_num and <col>_char for easy distribution viewing.",
         "Modules" =
           "Use the Modules dropdown to browse tables, variables and missing data."
       )
