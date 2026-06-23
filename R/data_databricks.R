@@ -18,6 +18,8 @@ library(DBI)
 
 # Per-panel lab dataset loader + the mixed-column splitter.
 source(file.path("R", "lb_datasets.R"))
+# Concomitant medications: distinct-subject count helper.
+source(file.path("R", "cm_counts.R"))
 
 # Connect to the DataBricks SQL warehouse using ambient/env-var auth.
 connect_databricks <- function() {
@@ -54,6 +56,11 @@ load_emerald_data <- function() {
   con <- connect_databricks()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
+  # CM (Concomitant Medications) is a single file. Build CM_COUNTS from it: one
+  # row per (SubjectID, CMTRT_PREFERRED) so a count bar chart shows distinct
+  # subjects per medication, not raw record counts. See R/cm_counts.R.
+  cm <- split_mixed_columns(read_study_csv("cm", con))
+
   core <- list(
     DM = read_study_csv("dm", con),
     AE = read_study_csv("ae", con),
@@ -62,7 +69,9 @@ load_emerald_data <- function() {
     # EX (Study Drug Administration) is a single file. Pass it through the same
     # mixed numeric/text column splitter as the lab data (split_mixed_columns()
     # from R/lb_datasets.R) so dose findings view consistently.
-    EX = split_mixed_columns(read_study_csv("ex", con))
+    EX = split_mixed_columns(read_study_csv("ex", con)),
+    CM = cm,
+    CM_COUNTS = build_cm_subject_counts(cm)
   )
 
   # Each lab file (lb1, lb4, ...) becomes its own named dataset (CENTLAB, FSH,
