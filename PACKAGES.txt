@@ -5,3 +5,4 @@ teal.modules.general
 brickster
 DBI
 dplyr
+plotly

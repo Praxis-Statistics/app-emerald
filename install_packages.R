@@ -16,7 +16,10 @@ packages <- c(
   "DBI",
 
   # Data manipulation
-  "dplyr"
+  "dplyr",
+
+  # Interactive hover plots (Time Course / spaghetti module)
+  "plotly"
 )
 
 # Install packages not already installed

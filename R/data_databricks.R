@@ -20,6 +20,11 @@ library(DBI)
 source(file.path("R", "lb_datasets.R"))
 # Concomitant medications: distinct-subject count helper.
 source(file.path("R", "cm_counts.R"))
+# Inclusion/Exclusion: eligibility-deviation count helper + criterion lookup.
+source(file.path("R", "ie_counts.R"))
+source(file.path("R", "ie_criteria.R"))
+# Longitudinal "spaghetti" support: harmonised TIMECOURSE table + viewer module.
+source(file.path("R", "timecourse.R"))
 
 # Connect to the DataBricks SQL warehouse using ambient/env-var auth.
 connect_databricks <- function() {
@@ -61,6 +66,13 @@ load_emerald_data <- function() {
   # subjects per medication, not raw record counts. See R/cm_counts.R.
   cm <- split_mixed_columns(read_study_csv("cm", con))
 
+  # IE (Inclusion/Exclusion) is a single WIDE file: one row per subject with a
+  # Yes/No response per eligibility criterion. Build IE_COUNTS from it -- long
+  # format, one row per (SubjectID, Criterion) that carries a deviation -- so a
+  # count bar chart shows distinct subjects with a deviation per criterion. See
+  # R/ie_counts.R.
+  ie <- read_study_csv("ie", con)
+
   core <- list(
     DM = read_study_csv("dm", con),
     AE = read_study_csv("ae", con),
@@ -71,11 +83,23 @@ load_emerald_data <- function() {
     # from R/lb_datasets.R) so dose findings view consistently.
     EX = split_mixed_columns(read_study_csv("ex", con)),
     CM = cm,
-    CM_COUNTS = build_cm_subject_counts(cm)
+    CM_COUNTS = build_cm_subject_counts(cm),
+    IE = ie,
+    IE_COUNTS = build_ie_deviation_counts(ie),
+    # Static reference table mapping each IE criterion code to its category, item
+    # tag, short label and full protocol wording. No SubjectID, so it stays an
+    # unlinked lookup table browsable in Data Tables / Variable Browser.
+    IE_CRITERIA = IE_CRITERIA
   )
 
   # Each lab file (lb1, lb4, ...) becomes its own named dataset (CENTLAB, FSH,
   # UR, CHEM, HEM, VIR, PREG, DRUG, ...) with _num/_char helper columns added
   # for any mixed numeric/text column. See R/lb_datasets.R.
-  c(core, load_lb_datasets(con))
+  all <- c(core, load_lb_datasets(con))
+
+  # Derived longitudinal table stacking the visit-based domains (VS, EG, EX and
+  # the numeric lab panels) into one tidy long form for the spaghetti-plot
+  # viewer. Built last so every source domain is present. See R/timecourse.R.
+  all$TIMECOURSE <- build_timecourse(all)
+  all
 }

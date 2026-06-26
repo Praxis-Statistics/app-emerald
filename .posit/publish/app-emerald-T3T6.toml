@@ -4,7 +4,7 @@
 "$schema" = "https://cdn.posit.co/publisher/schemas/posit-publishing-schema-v3.json"
 type = "r-shiny"
 entrypoint = "app.R"
-title = "app-emerald"
+title = "Emerald (562-311 Exploratory App)"
 files = [
     "/app.R",
     "/R",
